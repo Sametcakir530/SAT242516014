@@ -14,9 +14,4 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.20" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="_DbScripts\" />
-    <Folder Include="_Documents\" />
-  </ItemGroup>
-
 </Project>

@@ -1,7 +1,5 @@
-﻿@page "/students"
-
-<h1>Students</h1>
-
+﻿@page "/Ders"
+<h1>Dersler</h1>
 <hr />
 
 @if (_myDbModel != null)
@@ -57,14 +55,7 @@
                         @foreach (var prop in GetProperties<Model>())
                         {
                             <td>
-                                @if (prop.PropertyType == typeof(DateTime?))
-                                {
-                                    @(((DateTime?)prop.GetValue(item))?.ToString("dd.MM.yyyy"))
-                                }
-                                else
-                                {
-                                    @(prop.GetValue(item))
-                                }
+                                @(prop.GetValue(item))
                             </td>
                         }
                     </tr>
@@ -80,36 +71,29 @@
             <div class="input-group mb-1" style="width: 300px!important;">
                 <div class="input-group-text" style="width: 100px!important;">@prop.Name</div>
 
-                @if (prop.PropertyType == typeof(DateTime?))
+                @if (prop.PropertyType == typeof(int?)) // 'Kredi' alanı için
                 {
-                    <input type="date" class="form-control"
-                           value="@( ((DateTime?)_model[prop.Name])?.ToString("yyyy-MM-dd") )"
-                           @onchange="@((e) => OnChange_Input(prop.Name, e.Value))" />
+                    <input type="number" class="form-control"
+                           value="@(_model[prop.Name])"
+                           @oninput="@((e) => OnChange_Input(prop.Name, e.Value))" />
                 }
-                else
+                else // string alanlar ('Kod', 'Ad')
                 {
                     @switch (prop.Name)
                     {
-                        case "Numara":
-                            <input type="tel" class="form-control"
-                                   value="@(_model[prop.Name])"
-                                   maxlength="10"
-                                   @oninput="@((e) => OnChange_Input(prop.Name, e.Value))" />
-                            break;
-                        case "Tc":
-                            <input type="tel" class="form-control"
-                                   value="@(_model[prop.Name])"
-                                   maxlength="11"
-                                   @oninput="@((e) => OnChange_Input(prop.Name, e.Value))" />
-                            break;
-                        default:
+                        case "Kod":
                             <input type="text" class="form-control"
                                    value="@(_model[prop.Name])"
+                                   maxlength="20"
                                    @onchange="@((e) => OnChange_Input(prop.Name, e.Value))" />
+                            break;
+                        default: // 'Ad' alanı
+                                 <input type="text" class="form-control"
+                                        value="@(_model[prop.Name])"
+                                        @onchange="@((e) => OnChange_Input(prop.Name, e.Value))" />
                             break;
                     }
                 }
-
             </div>
         }
 
@@ -172,8 +156,9 @@
     {
         _operation = Operations.List;
 
+        // GÜNCELLEME: SP adı değişti
         await _myDbModel_Provider
-            .Execute<Model>(_myDbModel, "sp_Students");
+            .Execute<Model>(_myDbModel, "sp_Ders_Listele");
 
         StateHasChanged();
     }
@@ -182,44 +167,26 @@
 
     #region OnClick_ Input, Operation, Save, Cancel
 
- 
+    // GÜNCELLEME: Input handling 'Ders' modeline göre (int? Kredi, string Kod/Ad)
     private void OnChange_Input(string name, object value)
     {
         var prop = typeof(Model).GetProperty(name);
-        var stringValue = value?.ToString() ?? string.Empty; 
+        var stringValue = value?.ToString() ?? string.Empty;
 
-        if (prop.PropertyType == typeof(DateTime?))
+        // 'Kredi' alanı (int?) için
+        if (prop.PropertyType == typeof(int?))
         {
-            if (DateTime.TryParse(stringValue, out DateTime dt))
+            if (int.TryParse(stringValue, out int intValue))
             {
-                prop.SetValue(_model, dt);
+                prop.SetValue(_model, intValue);
             }
             else
             {
-                prop.SetValue(_model, null);
+                prop.SetValue(_model, null); // Geçersizse veya boşsa null yap
             }
         }
-        
-        else if (name == "Numara" || name == "Tc")
+        else // 'Kod' ve 'Ad' alanları (string)
         {
-            
-            var filteredValue = new string(stringValue.Where(char.IsDigit).ToArray());
-
-       
-            if (name == "Numara" && filteredValue.Length > 10)
-            {
-                filteredValue = filteredValue.Substring(0, 10);
-            }
-            else if (name == "Tc" && filteredValue.Length > 11)
-            {
-                filteredValue = filteredValue.Substring(0, 11);
-            }
-
-            prop.SetValue(_model, filteredValue);
-        }
-        else
-        {
-            
             prop.SetValue(_model, stringValue);
         }
     }
@@ -241,8 +208,9 @@
     {
         var jsonvalues = _model.ItemToJson();
 
+        // GÜNCELLEME: SP adı değişti
         var results = await _myDbModel_Provider
-            .SetItems<MyDbModel_Result_KeyValue<string, bool>>("sp_Student_Add_Update_Remove"
+            .SetItems<MyDbModel_Result_KeyValue<string, bool>>("sp_Ders_Add_Update_Remove"
                 , ("operation", _operation.ToString().ToLower())
                 , ("jsonvalues", jsonvalues)
             );
@@ -265,16 +233,13 @@
             .GetProperties()
             .Where(p => p.GetIndexParameters().Length == 0);
 
-
+    // GÜNCELLEME: Model sınıfı 'Ders' tablosunu yansıtacak şekilde değişti
     class Model
     {
         public int Id { get; set; }
+        public string Kod { get; set; }
         public string Ad { get; set; }
-        public string Soyad { get; set; }
-        public string Email { get; set; }
-        public string Numara { get; set; }
-        public DateTime? DoğumTarihi { get; set; } 
-        public string Tc { get; set; }
+        public int? Kredi { get; set; } // int? olarak ayarlandı
 
         public object this[string name]
         {

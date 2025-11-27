@@ -6,15 +6,7 @@ using Microsoft.Data.SqlClient;
 public static class Extensions_SqlParameter
 {
 
-
-
-
-
-
-
-
     #region ToSqlParameter_Table_Type_Dictionary
-
     public static SqlParameter ToSqlParameter_Table_Type_Dictionary<TKey, TValue>(
         this IDictionary<TKey, TValue> dictionary,
         string parameterName,
@@ -39,7 +31,6 @@ public static class Extensions_SqlParameter
         else if (typeof(TValue) == typeof(object))
             valueTypeName = "Object";
 
-        //Type_Table_String_String
         parameterTypeName = $"Type_Dictionary_{keyTypeName}_{valueTypeName}";
 
         var dt = new DataTable();
@@ -52,7 +43,6 @@ public static class Extensions_SqlParameter
             row[1] = item.Value;
             dt.Rows.Add(row);
         }
-
         return new SqlParameter()
         {
             SqlDbType = sqlDbType,
@@ -62,11 +52,9 @@ public static class Extensions_SqlParameter
             Value = dt
         };
     }
-
     #endregion
 
     #region ToSqlParameter_Data_Type
-
     public static SqlParameter ToSqlParameter_Data_Type<T>(
         this T value,
         string parameterName,
@@ -96,17 +84,6 @@ public static class Extensions_SqlParameter
 
         return parameter;
     }
-
     #endregion
-
-
-
-
-
-
-
-
-
-
 
 }

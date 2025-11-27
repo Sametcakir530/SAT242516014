@@ -5,5 +5,6 @@ namespace SAT242516014.Data
 {
     public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
     {
+        
     }
 }

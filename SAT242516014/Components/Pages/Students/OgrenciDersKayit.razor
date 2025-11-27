@@ -1,0 +1,277 @@
+﻿@page "/OgrenciDersKayit"
+
+<h1>Öğrenci Ders Kayıtları</h1>
+
+<hr />
+
+@if (_myDbModel != null)
+{
+    <h4 class="text-@_operation.Color()">
+        @_operation.Title()
+    </h4>
+
+    <hr />
+
+    @if (!string.IsNullOrEmpty(_myDbModel.Message))
+    {
+        <h1 class="text-warning">
+            @_myDbModel.Message
+        </h1>
+    }
+
+    @if (_operation == Operations.List)
+    {
+        <table class="table table-striped">
+
+            <thead>
+                <tr>
+                    <th>
+                        <button class="btn btn-outline-@Operations.Add.Color()"
+                                @onclick="() => OnClick_Operation(Operations.Add)">
+                            @Operations.Add.Title()
+                        </button>
+                    </th>
+                    <th>Öğrenci</th>
+                    <th>Ders</th>
+                    <th>Dönem</th>
+                    <th>Kayıt Tarihi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _myDbModel.Items)
+                {
+                    <tr>
+                        <td>
+                            <div class="btn-group">
+                                @foreach (var operation in new[] { Operations.Update, Operations.Remove })
+                                {
+                                    <button class="btn btn-outline-@operation.Color()"
+                                            @onclick="() => OnClick_Operation(operation, item.OgrenciId, item.DersId)">
+                                        @operation.Title()
+                                    </button>
+                                }
+                            </div>
+                        </td>
+
+                        <td>@item.OgrenciAdSoyad</td>
+                        <td>@item.DersAd</td>
+                        <td>@item.Donem</td>
+                        <td>@item.KayitTarihi?.ToString("dd.MM.yyyy")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (new[] { Operations.Add, Operations.Update, Operations.Remove }.Contains(_operation))
+    {
+        <div class="input-group mb-1" style="width: 400px!important;">
+            <div class="input-group-text" style="width: 100px!important;">Öğrenci</div>
+            <select class="form-select" @bind="_model.OgrenciId"
+                    disabled="@(_operation != Operations.Add)">
+                <option value="0">--- Öğrenci Seçiniz ---</option>
+                @foreach (var student in _studentList)
+                {
+                    <option value="@student.Id">@student.AdSoyad</option>
+                }
+            </select>
+        </div>
+
+        <div class="input-group mb-1" style="width: 400px!important;">
+            <div class="input-group-text" style="width: 100px!important;">Ders</div>
+            <select class="form-select" @bind="_model.DersId"
+                    disabled="@(_operation != Operations.Add)">
+                <option value="0">--- Ders Seçiniz ---</option>
+                @foreach (var ders in _dersList)
+                {
+                    <option value="@ders.Id">@ders.Ad</option>
+                }
+            </select>
+        </div>
+
+        <div class="input-group mb-1" style="width: 400px!important;">
+            <div class="input-group-text" style="width: 100px!important;">Dönem</div>
+            <input type="text" class="form-control" @bind="_model.Donem"
+                   disabled="@(_operation == Operations.Remove)" />
+        </div>
+
+        <div class="input-group mb-1" style="width: 400px!important;">
+            <div class="input-group-text" style="width: 100px!important;">Kayıt Tarihi</div>
+            <input type="date" class="form-control"
+                   value="@(_model.KayitTarihi?.ToString("yyyy-MM-dd"))"
+                   @onchange="@((e) => _model.KayitTarihi = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))"
+                   disabled="@(_operation == Operations.Remove)" />
+        </div>
+
+        <div class="btn-group" style="width: 400px!important;">
+
+            <button class="btn btn-outline-@Operations.Cancel.Color()"
+                    style="width: 100px!important;"
+                    @onclick="() => OnClick_Cancel()">
+                @Operations.Cancel.Title()
+            </button>
+
+            <button class="btn btn-@_operation.Color()"
+                    style="width: 300px!important;"
+                    @onclick="() => OnClick_Save()">
+                @_operation.Title()
+            </button>
+
+        </div>
+    }
+}
+
+@using System.Reflection
+@using Microsoft.JSInterop
+@using System.Linq
+
+@using Attributes
+@using Extensions
+@using MyDbModels
+@using Providers
+
+
+@inject IMyDbModel<Model> _myDbModel
+@inject IMyDbModel_Provider _myDbModel_Provider
+@inject IJSRuntime JS
+
+@code {
+    #region Fields
+
+    Operations _operation = Operations.List;
+
+    Model _model = new();
+
+    // DEĞİŞİKLİK: Dropdown listeleri için yeni alanlar
+    List<LookupModel> _studentList = new();
+    List<LookupModel> _dersList = new();
+
+    #endregion
+
+    #region OnAfterRenderAsync
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // DEĞİŞİKLİK: Sadece kayıtları değil, dropdownları da yükle
+            await LoadLookups(); // Önce dropdownlar
+            await GetItems();    // Sonra ana liste
+        }
+    }
+
+    #endregion
+
+    #region GetItems / LoadLookups
+
+    async Task GetItems()
+    {
+        _operation = Operations.List;
+
+        // DEĞİŞİKLİK: SP adı güncellendi
+        await _myDbModel_Provider
+            .Execute<Model>(_myDbModel, "sp_OgrenciDersKayit_Listele");
+
+        StateHasChanged();
+    }
+
+    // YENİ METOT: Dropdown listelerini doldurur
+    async Task LoadLookups()
+    {
+        _studentList = (await _myDbModel_Provider.SetItems<LookupModel>("sp_Student_Lookup")).ToList();
+        _dersList = (await _myDbModel_Provider.SetItems<LookupModel>("sp_Ders_Lookup")).ToList();
+    }
+
+    #endregion
+
+    #region OnClick_ Operation, Save, Cancel
+
+    // DEĞİŞİKLİK: OnChange_Input kaldırıldı, çünkü @bind kullanıyoruz.
+
+    // DEĞİŞİKLİK: Metot imzası kompozit anahtara göre (OgrenciId, DersId) güncellendi
+    private void OnClick_Operation(Operations operation, int ogrenciId = 0, int dersId = 0)
+    {
+        _operation = operation;
+
+        if (_operation == Operations.Add)
+        {
+            _model = new Model();
+            _model.KayitTarihi = DateTime.Today; // Yeni kayıt için bugünün tarihini ata
+        }
+        else
+        {
+            // Bulma kriteri kompozit anahtara göre güncellendi
+            _model = _myDbModel
+                .Items
+                .FirstOrDefault(f => f.OgrenciId == ogrenciId && f.DersId == dersId) ?? new Model();
+        }
+    }
+
+    private async void OnClick_Save()
+    {
+        var jsonvalues = _model.ItemToJson();
+
+        // DEĞİŞİKLİK: SP adı güncellendi
+        var results = await _myDbModel_Provider
+            .SetItems<MyDbModel_Result_KeyValue<string, bool>>("sp_OgrenciDersKayit_Add_Update_Remove"
+                , ("operation", _operation.ToString().ToLower())
+                , ("jsonvalues", jsonvalues)
+            );
+
+        var result = results.FirstOrDefault();
+
+        await JS.InvokeVoidAsync("alert", $"{result.Key} : {result.Value}");
+
+        await GetItems();
+    }
+
+    private void OnClick_Cancel() => _operation = Operations.List;
+
+    #endregion
+
+    #region Models
+
+    // DEĞİŞİKLİK: GetProperties kaldırıldı.
+
+    // DEĞİŞİKLİK: Model sınıfı, View_OgrenciDersKayit'i yansıtacak şekilde güncellendi
+    class Model
+    {
+        // Kompozit Anahtar Alanları
+        public int OgrenciId { get; set; }
+        public int DersId { get; set; }
+
+        // JOIN'den gelen gösterim alanları
+        public string OgrenciAdSoyad { get; set; }
+        public string DersAd { get; set; }
+
+        // Diğer veri alanları
+        public DateTime? KayitTarihi { get; set; }
+        public string Donem { get; set; }
+
+        // DEĞİŞİKLİK: Indexer (this[string name]) kaldırıldı.
+    }
+
+    // YENİ SINIF: Dropdown'ları doldurmak için basit bir model
+    class LookupModel
+    {
+        public int Id { get; set; }
+        public string Ad { get; set; } // sp_Ders_Lookup için
+        public string AdSoyad { get; set; } // sp_Student_Lookup için
+    }
+
+    #endregion
+
+    #region Enums
+
+    enum Operations
+    {
+        //attribute
+        [Color("info"), Title("List")] List,
+        [Color("success"), Title("Add")] Add,
+        [Color("warning"), Title("Update")] Update,
+        [Color("danger"), Title("Remove")] Remove,
+        [Color("dark"), Title("Cancel")] Cancel
+    }
+
+    #endregion
+}
