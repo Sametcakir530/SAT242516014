@@ -1,8 +1,6 @@
 namespace Extensions;
-
 using System.Data;
 using System.Reflection;
-
 public static class Extensions_DataTable
 {
     public static IEnumerable<T> DataTableToList<T>(this DataTable table) where T : class
@@ -18,13 +16,9 @@ public static class Extensions_DataTable
                 .ConvertAll(row => GetObject<T>(row, columnsNames));
         }
         catch (Exception)
-        {
-            // ...
-        }
-
+        {    }
         return list;
     }
-
     public static T GetObject<T>(this DataRow row, List<string> columnsName) where T : class
     {
         T obj = (T)Activator.CreateInstance(typeof(T));
@@ -52,10 +46,7 @@ public static class Extensions_DataTable
             }
         }
         catch (Exception)
-        {
-            // ...
-        }
-
+        {    }
         return obj;
     }
 }

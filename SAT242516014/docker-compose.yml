@@ -1,0 +1,18 @@
+
+# docker build -t sat242516014:latest .
+
+# docker compose up -d
+
+version: "3.9"
+
+services:
+  blazorapp:
+    image: sat242516014:latest
+    container_name: sat242516014
+    ports:
+      - "8089:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=host.docker.internal,1445;Database=SAT242516014;User Id=sa;Password=Oo_454545;TrustServerCertificate=True;Encrypt=True;
+      - SITE=SAT242516014
+    restart: unless-stopped

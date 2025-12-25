@@ -1,0 +1,49 @@
+﻿@page "/Reports/Student"
+
+<h3>Student_Report</h3>
+
+
+@if (!string.IsNullOrEmpty(pdfDataUrl))
+{
+    <iframe src="@pdfDataUrl" width="100%" height="700px"></iframe>
+}
+else
+{
+    <p>Yükleniyor...</p>
+}
+
+@using MyDbModels
+@using Providers
+@using MyReports
+
+@inject IMyDbModel_Provider _myDbModel_Provider
+@inject IMyDbModel<Student> _myDbModel
+
+@code {
+
+    string? pdfDataUrl;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _myDbModel.Parameters.PageSize = 100;
+            var results = await _myDbModel_Provider.Execute<Student>(_myDbModel, "sp_Students");
+
+            await GeneratePdfAsync();
+        }
+    }
+
+    private async Task GeneratePdfAsync()
+    {
+        var students = _myDbModel.Items.ToList();
+
+        var report = new Report_Student();
+        var pdfBytes = report.Generate(students);
+
+        pdfDataUrl = $"data:application/pdf;base64,{Convert.ToBase64String(pdfBytes)}";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+}

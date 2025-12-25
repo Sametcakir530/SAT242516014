@@ -1,11 +1,8 @@
 namespace Extensions;
-
 using System.Data;
 using Microsoft.Data.SqlClient;
-
 public static class Extensions_SqlParameter
 {
-
     #region ToSqlParameter_Table_Type_Dictionary
     public static SqlParameter ToSqlParameter_Table_Type_Dictionary<TKey, TValue>(
         this IDictionary<TKey, TValue> dictionary,
@@ -30,9 +27,7 @@ public static class Extensions_SqlParameter
             valueTypeName = "String";
         else if (typeof(TValue) == typeof(object))
             valueTypeName = "Object";
-
         parameterTypeName = $"Type_Dictionary_{keyTypeName}_{valueTypeName}";
-
         var dt = new DataTable();
         dt.Columns.Add("Key", typeof(TKey));
         dt.Columns.Add("Value", typeof(TValue));
@@ -53,7 +48,6 @@ public static class Extensions_SqlParameter
         };
     }
     #endregion
-
     #region ToSqlParameter_Data_Type
     public static SqlParameter ToSqlParameter_Data_Type<T>(
         this T value,
@@ -73,7 +67,6 @@ public static class Extensions_SqlParameter
             sqlDbType = SqlDbType.NVarChar;
         else if (typeof(T) == typeof(bool) || typeof(T) == typeof(bool?))
             sqlDbType = SqlDbType.Bit;
-
         var parameter = new SqlParameter
         {
             SqlDbType = sqlDbType,
@@ -81,9 +74,7 @@ public static class Extensions_SqlParameter
             ParameterName = parameterName,
             Value = value == null ? DBNull.Value : value
         };
-
         return parameter;
     }
     #endregion
-
 }

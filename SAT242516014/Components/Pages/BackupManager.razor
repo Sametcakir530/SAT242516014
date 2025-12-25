@@ -1,0 +1,198 @@
+﻿@page "/backup-manager"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@using Microsoft.AspNetCore.Authorization
+@using Providers 
+@* IMyDbModel_Provider servisi *@
+
+@inject IMyDbModel_Provider _dbProvider
+@inject IJSRuntime JS
+
+<div class="container mt-4">
+    <div class="card shadow border-0">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h3 class="m-0"><i class="fas fa-database"></i> Veritabanı Yönetim Paneli</h3>
+            <span class="badge bg-warning text-dark">Linux / Docker Modu</span>
+        </div>
+        <div class="card-body">
+            
+            @* --- YEDEK ALMA BUTONU --- *@
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="alert alert-info d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Yeni Yedek Oluştur:</strong> Yedekler sunucunun <code>@_linuxPath</code> klasörüne kaydedilir.
+                        </div>
+                        <button class="btn btn-success fw-bold" @onclick="CreateBackup" disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span> <span>İşleniyor...</span>
+                            }
+                            else
+                            {
+                                <span><i class="fas fa-save"></i> Şimdi Yedek Al</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <hr />
+
+            @* --- YEDEK LİSTESİ (SQL GEÇMİŞİNDEN) --- *@
+            <h4 class="mb-3 text-secondary">Yedekleme Geçmişi</h4>
+            
+            @if (_backupHistory == null || !_backupHistory.Any())
+            {
+                <div class="text-center p-4 text-muted border rounded bg-light">
+                    Henüz bir yedekleme kaydı bulunamadı.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Dosya Yolu (Sunucu)</th>
+                                <th>Tarih</th>
+                                <th>Boyut</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _backupHistory)
+                            {
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-hdd text-secondary me-2"></i> 
+                                        <small>@item.DosyaYolu</small>
+                                    </td>
+                                    <td>@item.BaslamaTarihi.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@item.BoyutMB.ToString("N2") MB</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => RestoreDatabase(item.DosyaYolu)">
+                                            <i class="fas fa-history"></i> Geri Yükle
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // SQL'den gelen veriyi karşılamak için model
+    public class BackupHistoryModel
+    {
+        public string Veritabani { get; set; }
+        public string DosyaYolu { get; set; }
+        public DateTime BaslamaTarihi { get; set; }
+        public DateTime BitisTarihi { get; set; }
+        public decimal BoyutMB { get; set; }
+    }
+
+    // Prosedürden dönen mesaj sonucu için
+    public class DbResult { public string Status { get; set; } public string Message { get; set; } }
+
+    // SQL Server (Linux/Docker) içindeki varsayılan yol
+    private const string _linuxPath = "/var/opt/mssql/data"; 
+    
+    private bool _isProcessing = false;
+    private List<BackupHistoryModel> _backupHistory = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshHistory();
+    }
+
+    // Dosyaları klasörden değil, SQL geçmişinden çeker (Docker için gerekli)
+    private async Task RefreshHistory()
+    {
+        try
+        {
+            // sp_Get_Backup_History prosedürünü çağırıyoruz
+            var result = await _dbProvider.GetItems<BackupHistoryModel>("sp_Get_Backup_History");
+            _backupHistory = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Geçmiş çekilemedi: " + ex.Message);
+        }
+    }
+
+    // 1. YEDEK ALMA
+    private async Task CreateBackup()
+    {
+        _isProcessing = true;
+        try
+        {
+            // Linux formatında dosya yolu oluşturuyoruz
+            string fileName = $"OkulYedek_{DateTime.Now:yyyyMMdd_HHmmss}.bak";
+            string fullPath = $"{_linuxPath}/{fileName}"; // Linux slash (/) kullanır
+
+            var resultList = await _dbProvider.SetItems<DbResult>("sp_Database_Backup", 
+                (Key: "BackupPath", Value: fullPath));
+
+            var result = resultList.FirstOrDefault();
+            
+            if (result != null && result.Status == "Success")
+            {
+                await JS.InvokeVoidAsync("alert", "BAŞARILI: " + result.Message);
+                await RefreshHistory(); // Listeyi yenile
+            }
+            else if (result != null)
+            {
+                await JS.InvokeVoidAsync("alert", "HATA: " + result.Message);
+            }
+            else
+            {
+                await RefreshHistory();
+                await JS.InvokeVoidAsync("alert", "İşlem tamamlandı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "Sistem Hatası: " + ex.Message);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    // 2. GERİ YÜKLEME
+    private async Task RestoreDatabase(string filePath)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", 
+            $"DİKKAT! Veritabanı şu dosyadan geri yüklenecek:\n{filePath}\n\nMevcut veriler silinecek. Emin misiniz?");
+        
+        if (!confirmed) return;
+
+        _isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var resultList = await _dbProvider.SetItems<DbResult>("sp_Database_Restore", 
+                (Key: "BackupPath", Value: filePath));
+            
+            await JS.InvokeVoidAsync("alert", "Geri yükleme komutu gönderildi. Bağlantı kısa süreliğine kopabilir. Lütfen sayfayı yenileyin.");
+        }
+        catch (Exception ex)
+        {
+            // Bağlantı kopması normaldir
+            await JS.InvokeVoidAsync("alert", "İşlem Tamamlandı (Bağlantı Yenilendi).");
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+}

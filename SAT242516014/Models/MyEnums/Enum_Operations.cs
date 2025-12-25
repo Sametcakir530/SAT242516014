@@ -1,0 +1,23 @@
+﻿//SAT242516000 : proje adına göre değiştir
+using Attributes;
+using Attributes;
+using SAT242516014.Filtering;
+using R = SAT242516014.Models.MyResources.MyResource;
+namespace MyEnums;
+public enum Operations
+{
+    [Color("primary"), LocalizedDescription("List", typeof(R))]
+    List,
+    [Color("info"), LocalizedDescription("Detail", typeof(R))]
+    Detail,
+    [Color("success"), LocalizedDescription("Add", typeof(R))]
+    Add,
+    [Color("warning"), LocalizedDescription("Update", typeof(R))]
+    Update,
+    [Color("danger"), LocalizedDescription("Remove", typeof(R))]
+    Remove,
+    [Color("dark"), LocalizedDescription("Cancel", typeof(R))]
+    Cancel,
+    [Color("secondary"), LocalizedDescription("Reset", typeof(R))]
+    Reset,
+}

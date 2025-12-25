@@ -1,0 +1,138 @@
+﻿@page "/StudentStats"
+@using Microsoft.JSInterop
+@using Providers
+@using System.Linq
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Admin,User")]
+@inject IMyDbModel_Provider _myDbModel_Provider
+@inject IJSRuntime JS
+
+<div class="container-fluid mt-3">
+    <h3 class="fw-bold text-dark mb-4"><i class="fas fa-chart-line text-primary"></i> Akademik Veri Analizi</h3>
+
+    @if (isLoading)
+    {
+        <div class="text-center mt-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Veriler analiz ediliyor...</p>
+        </div>
+    }
+    else if (!hasData)
+    {
+        <div class="alert alert-warning border-0 shadow-sm">
+            <i class="fas fa-exclamation-circle"></i> Analiz edilecek kayıt bulunamadı.
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @* 1. Grafik: Ders Başına Öğrenci Kaydı *@
+            <div class="col-md-12 mb-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-success text-white fw-bold">
+                        <i class="fas fa-book-reader"></i> Derslere Göre Öğrenci Kayıt Sayıları (Popüler Dersler)
+                    </div>
+                    <div class="card-body">
+                        <canvas id="courseStudentChart" style="height: 350px;"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            @* 2. Grafik: Email Uzantı Dağılımı *@
+            <div class="col-md-6 mb-4 mx-auto">
+                @* mx-auto ile ortalandı *@
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-dark text-white fw-bold">
+                        <i class="fas fa-envelope"></i> Email Servis Dağılımı (Domain Analizi)
+                    </div>
+                    <div class="card-body">
+                        <canvas id="emailDomainChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool hasData = false;
+
+    public class StatsData
+    {
+        public string Label { get; set; }
+        public int Value { get; set; }
+    }
+
+    public class ChartSeries
+    {
+        public string label { get; set; }
+        public List<object> data { get; set; }
+        public string[] backgroundColor { get; set; }
+        public string borderColor { get; set; }
+        public int borderWidth { get; set; } = 1;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await DrawCharts();
+        }
+    }
+
+    private async Task DrawCharts()
+    {
+        try
+        {
+            // Verileri SQL prosedürlerinden çekiyoruz (Bölüm istatistiği kaldırıldı)
+            var courseStats = (await _myDbModel_Provider.SetItems<StatsData>("sp_Ders_Stats")).ToList();
+            var emailStats = (await _myDbModel_Provider.SetItems<StatsData>("sp_Student_Email_Stats")).ToList();
+
+            isLoading = false;
+
+            if (courseStats.Any() || emailStats.Any())
+            {
+                hasData = true;
+                StateHasChanged();
+                await Task.Delay(300);
+
+                // 1. DERS BAŞINA ÖĞRENCİ GRAFİĞİ (DİKEY BAR)
+                var cLabels = courseStats.Select(s => s.Label).ToArray();
+                var cValues = courseStats.Select(s => (object)s.Value).ToList();
+                var cSeries = new List<ChartSeries> {
+                    new ChartSeries {
+                        label = "Kayıtlı Öğrenci Sayısı",
+                        data = cValues,
+                        backgroundColor = new[] { "#198754" }
+                    }
+                };
+                await JS.InvokeVoidAsync("drawBarChart", "courseStudentChart", cLabels, cSeries, true, true, 'x');
+
+                // 2. EMAIL DOMAIN GRAFİĞİ (PIE)
+                var eLabels = emailStats.Select(s => s.Label).ToArray();
+                var eValues = emailStats.Select(s => (object)s.Value).ToList();
+                var eSeries = new List<ChartSeries> {
+                    new ChartSeries {
+                        label = "E-posta",
+                        data = eValues,
+                        backgroundColor = new[] { "#fd7e14", "#20c997", "#6610f2", "#adb5bd" }
+                    }
+                };
+                await JS.InvokeVoidAsync("drawPieChart", "emailDomainChart", eLabels, eSeries);
+            }
+            else
+            {
+                hasData = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            isLoading = false;
+            StateHasChanged();
+            Console.WriteLine("Hata: " + ex.Message);
+        }
+    }
+}

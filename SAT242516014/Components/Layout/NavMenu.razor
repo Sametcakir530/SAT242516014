@@ -1,15 +1,12 @@
-﻿@implements IDisposable
-
+﻿
+@implements IDisposable
 @inject NavigationManager NavigationManager
-
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">SAT242516014</a>
     </div>
 </div>
-
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
         <div class="nav-item px-3">
@@ -17,33 +14,41 @@
                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
             </NavLink>
         </div>
-
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/backup-manager">
+                <span class="bi bi-journal-text" aria-hidden="true"></span> BackupManager
+            </NavLink>
+        </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="Students">
                 <span class="bi bi-journal-text" aria-hidden="true"></span> Öğrenci
             </NavLink>
         </div>
-
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="Ogretmen">
+                <span class="bi bi-journal-text" aria-hidden="true"></span> Öğretmenler
+            </NavLink>
+        </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="Ders">
                 <span class="bi bi-people" aria-hidden="true"></span> Ders
             </NavLink>
         </div>
-
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="Siniflar">
+                <span class="bi bi-people" aria-hidden="true"></span> Sınıflar
+            </NavLink>
+        </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="OgrenciDersKayit">
                 <span class="bi bi-people" aria-hidden="true"></span> OgrenciDersKayit
             </NavLink>
         </div>
-
-
-
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="auth">
                 <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
             </NavLink>
         </div>
-
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
@@ -76,22 +81,18 @@
         </AuthorizeView>
     </nav>
 </div>
-
 @code {
     private string? currentUrl;
-
     protected override void OnInitialized()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
     }
-
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
         StateHasChanged();
     }
-
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;

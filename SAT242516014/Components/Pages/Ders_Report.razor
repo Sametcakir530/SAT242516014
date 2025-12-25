@@ -1,0 +1,67 @@
+﻿@page "/Reports/Ders"
+
+<h3>Ders Listesi Raporu</h3>
+
+@if (!string.IsNullOrEmpty(pdfDataUrl))
+{
+    @* PDF Görüntüleyici *@
+    <iframe src="@pdfDataUrl" width="100%" height="700px" style="border: 1px solid #ccc;"></iframe>
+}
+else
+{
+    <div class="alert alert-info">
+        Rapor hazırlanıyor, lütfen bekleyiniz...
+    </div>
+}
+
+@using MyDbModels
+@using Providers
+@using MyReports
+
+@inject IMyDbModel_Provider _myDbModel_Provider
+@* Veritabanı modelinizdeki 'Ders' sınıfını buraya inject ediyoruz *@
+@inject IMyDbModel<Ders> _myDbModel
+
+@code {
+
+    string? pdfDataUrl;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Tüm dersleri çekmek için sayfa boyutunu genişletiyoruz
+            _myDbModel.Parameters.PageSize = 1000;
+
+            // Dersleri listeleyen SP'yi çağırıyoruz
+            var results = await _myDbModel_Provider.Execute<Ders>(_myDbModel, "sp_Ders_Listele");
+
+            await GeneratePdfAsync();
+        }
+    }
+
+    private async Task GeneratePdfAsync()
+    {
+        var dbItems = _myDbModel.Items.ToList();
+
+        var reportItems = dbItems.Select(x => new MyReports.Ders
+        {
+            Id = x.Id,
+            Kod = x.Kod,
+            Ad = x.Ad,
+
+            // DÜZELTME BURADA:
+            // x.Kredi zaten int olduğu için direkt atıyoruz.
+            Kredi = x.Kredi,
+
+            SinifAdi = x.SinifAdi
+        }).ToList();
+
+        var report = new Report_Ders();
+        var pdfBytes = report.Generate(reportItems);
+
+        pdfDataUrl = $"data:application/pdf;base64,{Convert.ToBase64String(pdfBytes)}";
+
+        await InvokeAsync(StateHasChanged);
+    }
+}

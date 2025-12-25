@@ -1,266 +1,293 @@
 ﻿@page "/Ders"
-<h1>Dersler</h1>
-<hr />
 
-@if (_myDbModel != null)
-{
-    <h4 class="text-@_operation.Color()">
-        @_operation.Title()
-    </h4>
-
-    <hr />
-
-    @if (!string.IsNullOrEmpty(_myDbModel.Message))
-    {
-        <h1 class="text-warning">
-            @_myDbModel.Message
-        </h1>
-    }
-
-    @if (_operation == Operations.List)
-    {
-        <table class="table table-striped">
-
-            <thead>
-                <tr>
-                    <th>
-                        <button class="btn btn-outline-@Operations.Add.Color()"
-                                @onclick="() => OnClick_Operation(Operations.Add)">
-                            @Operations.Add.Title()
-                        </button>
-                    </th>
-                    @foreach (var prop in GetProperties<Model>())
-                    {
-                        <th>@prop.Name</th>
-                    }
-
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in _myDbModel.Items)
-                {
-                    <tr>
-                        <td>
-                            <div class="btn-group">
-                                @foreach (var operation in new[] { Operations.Update, Operations.Remove })
-                                {
-                                    <button class="btn btn-outline-@operation.Color()"
-                                            @onclick="() => OnClick_Operation(operation, item.Id)">
-                                        @operation.Title()
-                                    </button>
-                                }
-                            </div>
-                        </td>
-
-                        @foreach (var prop in GetProperties<Model>())
-                        {
-                            <td>
-                                @(prop.GetValue(item))
-                            </td>
-                        }
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
-    @if (new[] { Operations.Add, Operations.Update, Operations.Remove }.Contains(_operation))
-    {
-        @foreach (var prop in GetProperties<Model>().Where(p => p.Name != "Id"))
-        {
-            <div class="input-group mb-1" style="width: 300px!important;">
-                <div class="input-group-text" style="width: 100px!important;">@prop.Name</div>
-
-                @if (prop.PropertyType == typeof(int?)) // 'Kredi' alanı için
-                {
-                    <input type="number" class="form-control"
-                           value="@(_model[prop.Name])"
-                           @oninput="@((e) => OnChange_Input(prop.Name, e.Value))" />
-                }
-                else // string alanlar ('Kod', 'Ad')
-                {
-                    @switch (prop.Name)
-                    {
-                        case "Kod":
-                            <input type="text" class="form-control"
-                                   value="@(_model[prop.Name])"
-                                   maxlength="20"
-                                   @onchange="@((e) => OnChange_Input(prop.Name, e.Value))" />
-                            break;
-                        default: // 'Ad' alanı
-                                 <input type="text" class="form-control"
-                                        value="@(_model[prop.Name])"
-                                        @onchange="@((e) => OnChange_Input(prop.Name, e.Value))" />
-                            break;
-                    }
-                }
-            </div>
-        }
-
-        <div class="btn-group" style="width: 300px!important;">
-
-            <button class="btn btn-outline-@Operations.Cancel.Color()"
-                    style="width: 100px!important;"
-                    @onclick="() => OnClick_Cancel()">
-                @Operations.Cancel.Title()
-            </button>
-
-            <button class="btn btn-@_operation.Color()"
-                    style="width: 200px!important;"
-                    @onclick="() => OnClick_Save()">
-                @_operation.Title()
-            </button>
-
-        </div>
-    }
-}
+@* Yetkilendirme: Sadece Adminler *@
+@attribute [Authorize(Roles = "Admin")]
 
 @using System.Reflection
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.JSInterop
 @using System.Linq
+@using System.Text.Json
 
 @using Attributes
 @using Extensions
 @using MyDbModels
 @using Providers
+@using Microsoft.Extensions.Localization
 
-
+@* Gerekli Servisler *@
 @inject IMyDbModel<Model> _myDbModel
 @inject IMyDbModel_Provider _myDbModel_Provider
 @inject IJSRuntime JS
+@inject LocalizerService<MyResource> _localizer
+
+<h1 class="text-danger">
+    @_localizer["Courses"]
+</h1>
+
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <h1 class="text-danger fw-bold"><i class="fas fa-book"></i> Ders Yönetimi</h1>
+    </div>
+    <hr />
+
+    @if (_myDbModel != null)
+    {
+        @* --- HATA / BİLGİ MESAJI --- *@
+        @if (!string.IsNullOrEmpty(_myDbModel.Message))
+        {
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i> @_myDbModel.Message
+                <button type="button" class="btn-close" @onclick='() => _myDbModel.Message = ""'></button>
+            </div>
+        }
+
+        @* --- LİSTELEME MODU --- *@
+        @if (_operation == Operations.List)
+        {
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <button class="btn btn-success fw-bold" @onclick="() => OnClick_Operation(Operations.Add)">
+                        <i class="fas fa-plus"></i> Yeni Ders Ekle
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover table-striped mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 200px;">İşlemler</th>
+                                <th>Kod</th>
+                                <th>Ad</th>
+                                <th>Kredi</th>
+                                <th>Sınıf</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _myDbModel.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-warning text-dark fw-bold" @onclick="() => OnClick_Operation(Operations.Update, item.Id)">
+                                                <i class="fas fa-edit"></i> Güncelle
+                                            </button>
+                                            <button class="btn btn-outline-danger fw-bold" @onclick="() => OnClick_Operation(Operations.Remove, item.Id)">
+                                                <i class="fas fa-trash"></i> Sil
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="fw-bold text-primary">@item.Kod</td>
+                                    <td>@item.Ad</td>
+                                    <td><span class="badge bg-secondary">@item.Kredi Kredi</span></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(item.SinifAdi) && item.SinifAdi != "-")
+                                        {
+                                            <span class="badge bg-info text-dark">@item.SinifAdi</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @* --- EKLEME / GÜNCELLEME / SİLME FORMU --- *@
+        @if (new[] { Operations.Add, Operations.Update, Operations.Remove }.Contains(_operation))
+        {
+            <div class="card shadow border-0 mt-4" style="max-width: 600px;">
+                <div class="card-header bg-@_operation.Color() text-white">
+                    <h5 class="m-0"><i class="fas fa-edit"></i> @_operation.Title()</h5>
+                </div>
+                <div class="card-body">
+
+                    @* 1. SINIF SEÇİMİ (DROPDOWN) *@
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Sınıf Seçimi</label>
+                        <select class="form-select" @bind="_model.SinifId" disabled="@(_operation == Operations.Remove)">
+                            <option value="0">--- Sınıf Seçiniz ---</option>
+                            @foreach (var sinif in _sinifList)
+                            {
+                                <option value="@sinif.Id">@sinif.Ad</option>
+                            }
+                        </select>
+                    </div>
+
+                    @* 2. DİNAMİK INPUTLAR (Kod, Ad, Kredi) *@
+                    @foreach (var prop in GetProperties<Model>().Where(p => p.Name != "Id" && p.Name != "SinifId" && p.Name != "SinifAdi"))
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">@prop.Name</label>
+
+                            @if (prop.PropertyType == typeof(int?))
+                            {
+                                <input type="number" class="form-control"
+                                                           value="@(_model[prop.Name])"
+                                                           @oninput="@((e) => OnChange_Input(prop.Name, e.Value))"
+                                                           disabled="@(_operation == Operations.Remove)" />
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control"
+                                                           value="@(_model[prop.Name])"
+                                                           maxlength="@(prop.Name == "Kod" ? 20 : 100)"
+                                                           @onchange="@((e) => OnChange_Input(prop.Name, e.Value))"
+                                                           disabled="@(_operation == Operations.Remove)" />
+                            }
+                        </div>
+                    }
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button class="btn btn-secondary" @onclick="OnClick_Cancel">İptal</button>
+                        <button class="btn btn-@_operation.Color()" @onclick="OnClick_Save">
+                            <i class="fas fa-save"></i> @(_operation == Operations.Remove ? "Onayla ve Sil" : "Kaydet")
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        }
+    }
+</div>
 
 @code {
-    #region Fields
-
-    Operations _operation = Operations.List;
-
+    #region Fields
+    Operations _operation = Operations.List;
     Model _model = new();
+    List<LookupModel> _sinifList = new();
+    #endregion
 
-    #endregion
-
-    #region OnAfterRenderAsync
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    #region Lifecycle
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            await LoadLookups();
             await GetItems();
         }
     }
+    #endregion
 
-    #endregion
-
-    #region GetItems
-
-    async Task GetItems()
+    #region Data Methods
+    async Task GetItems()
     {
         _operation = Operations.List;
-
-        // GÜNCELLEME: SP adı değişti
-        await _myDbModel_Provider
-            .Execute<Model>(_myDbModel, "sp_Ders_Listele");
-
+        // View_Ders tablosundan veri çeker (Id, Kod, Ad, Kredi, SinifId, SinifAdi)
+        await _myDbModel_Provider.Execute<Model>(_myDbModel, "sp_Ders_Listele");
         StateHasChanged();
     }
 
-    #endregion
+    async Task LoadLookups()
+    {
+        // Dropdown için sınıf listesini çeker
+        var result = await _myDbModel_Provider.SetItems<LookupModel>("sp_Sinif_Lookup");
+        _sinifList = result.ToList();
+    }
+    #endregion
 
-    #region OnClick_ Input, Operation, Save, Cancel
-
-    // GÜNCELLEME: Input handling 'Ders' modeline göre (int? Kredi, string Kod/Ad)
-    private void OnChange_Input(string name, object value)
+    #region Event Handlers
+    private void OnChange_Input(string name, object value)
     {
         var prop = typeof(Model).GetProperty(name);
+        if (prop == null) return;
+
         var stringValue = value?.ToString() ?? string.Empty;
 
-        // 'Kredi' alanı (int?) için
         if (prop.PropertyType == typeof(int?))
         {
             if (int.TryParse(stringValue, out int intValue))
-            {
                 prop.SetValue(_model, intValue);
-            }
             else
-            {
-                prop.SetValue(_model, null); // Geçersizse veya boşsa null yap
-            }
+                prop.SetValue(_model, null);
         }
-        else // 'Kod' ve 'Ad' alanları (string)
+        else
         {
             prop.SetValue(_model, stringValue);
         }
     }
 
-
     private void OnClick_Operation(Operations operation, int? id = 0)
     {
         _operation = operation;
-
         if (_operation == Operations.Add)
+        {
             _model = new Model();
+        }
         else
-            _model = _myDbModel
-                .Items
-                .FirstOrDefault(f => f.Id == id) ?? new Model();
+        {
+            _model = _myDbModel.Items.FirstOrDefault(f => f.Id == id) ?? new Model();
+        }
     }
 
     private async void OnClick_Save()
     {
-        var jsonvalues = _model.ItemToJson();
+        // KRİTİK: PascalCase uyumu için System.Text.Json kullanıyoruz.
+        // SQL tarafındaki OPENJSON içindeki alan isimleriyle birebir eşleşir.
+        var jsonvalues = JsonSerializer.Serialize(_model);
 
-        // GÜNCELLEME: SP adı değişti
-        var results = await _myDbModel_Provider
-            .SetItems<MyDbModel_Result_KeyValue<string, bool>>("sp_Ders_Add_Update_Remove"
-                , ("operation", _operation.ToString().ToLower())
-                , ("jsonvalues", jsonvalues)
-            );
+        var results = await _myDbModel_Provider.SetItems<MyDbModel_Result_KeyValue<string, bool>>(
+          "sp_Ders_Add_Update_Remove",
+          ("operation", _operation.ToString().ToLower()),
+          ("jsonvalues", jsonvalues)
+        );
 
         var result = results.FirstOrDefault();
-
-        await JS.InvokeVoidAsync("alert", $"{result.Key} : {result.Value}");
+        if (result != null)
+        {
+            await JS.InvokeVoidAsync("alert", result.Value ? "İşlem Başarılı" : "Hata: " + result.Key);
+        }
 
         await GetItems();
     }
 
     private void OnClick_Cancel() => _operation = Operations.List;
+    #endregion
 
-    #endregion
+    #region Helper & Models
+    private IEnumerable<PropertyInfo> GetProperties<T>() where T : class, new() =>
+    typeof(T).GetProperties().Where(p => p.GetIndexParameters().Length == 0);
 
-    #region Models
-
-    private IEnumerable<PropertyInfo> GetProperties<T>() where T : class, new() =>
-        typeof(T)
-            .GetProperties()
-            .Where(p => p.GetIndexParameters().Length == 0);
-
-    // GÜNCELLEME: Model sınıfı 'Ders' tablosunu yansıtacak şekilde değişti
-    class Model
+    public class Model
     {
         public int Id { get; set; }
         public string Kod { get; set; }
         public string Ad { get; set; }
-        public int? Kredi { get; set; } // int? olarak ayarlandı
+        public int? Kredi { get; set; }
 
-        public object this[string name]
+        // İlişkisel Veriler (Foreign Key)
+        public int SinifId { get; set; }
+        public string SinifAdi { get; set; }
+
+        // Indexer (Reflection ile dinamik erişim için)
+        public object this[string name]
         {
-            get => this.GetType().GetProperty(name).GetValue(this);
-            set => this.GetType().GetProperty(name).SetValue(this, value);
+            get => this.GetType().GetProperty(name)?.GetValue(this);
+            set => this.GetType().GetProperty(name)?.SetValue(this, value);
         }
     }
 
-    #endregion
-
-    #region Enums
-
-    enum Operations
+    public class LookupModel
     {
-        //attribute
-        [Color("info"), Title("List")] List,
-        [Color("success"), Title("Add")] Add,
-        [Color("warning"), Title("Update")] Update,
-        [Color("danger"), Title("Remove")] Remove,
-        [Color("dark"), Title("Cancel")] Cancel
+        public int Id { get; set; }
+        public string Ad { get; set; }
     }
+    #endregion
 
-    #endregion
+    #region Enums
+    enum Operations
+    {
+        [Color("info"), Title("Listele")] List,
+        [Color("success"), Title("Ders Ekle")] Add,
+        [Color("warning"), Title("Güncelle")] Update,
+        [Color("danger"), Title("Dersi Sil")] Remove,
+        [Color("secondary"), Title("İptal")] Cancel
+    }
+    #endregion
 }
+   

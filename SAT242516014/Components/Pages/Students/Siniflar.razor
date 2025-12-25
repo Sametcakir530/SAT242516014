@@ -1,0 +1,244 @@
+﻿@page "/Siniflar"
+
+@* Yetkilendirme: Sadece Adminler *@
+@attribute [Authorize(Roles = "Admin")]
+
+@using System.Reflection
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@using System.Linq
+@using System.Text.Json
+
+@using Attributes
+@using Extensions
+@using MyDbModels
+@using Providers
+
+@inject IMyDbModel<Model> _myDbModel
+@inject IMyDbModel_Provider _myDbModel_Provider
+@inject IJSRuntime JS
+@inject ILogger<Model> Logger
+@inject LocalizerService<MyResource> _localizer
+
+<h1 class="text-danger">
+    @_localizer["Classes"]
+</h1>
+
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <h1 class="text-danger fw-bold"><i class="fas fa-school"></i> Sınıf Yönetimi</h1>
+    </div>
+    <hr />
+
+    @if (_myDbModel != null)
+    {
+        @* --- HATA / BİLGİ MESAJI --- *@
+        @if (!string.IsNullOrEmpty(_myDbModel.Message))
+        {
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i> @_myDbModel.Message
+                <button type="button" class="btn-close" @onclick='() => _myDbModel.Message = ""'></button>
+            </div>
+        }
+
+        @* --- LİSTELEME MODU --- *@
+        @if (_operation == Operations.List)
+        {
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <button class="btn btn-success fw-bold" @onclick="() => OnClick_Operation(Operations.Add)">
+                        <i class="fas fa-plus"></i> Yeni Sınıf Ekle
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover table-striped mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 200px;">İşlemler</th>
+                                <th>Sınıf Adı</th>
+                                <th>Bulunduğu Kat</th>
+                                <th>Kapasite</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _myDbModel.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-warning text-dark fw-bold"
+                                                    @onclick="() => OnClick_Operation(Operations.Update, item.SinifId)">
+                                                <i class="fas fa-edit"></i> Güncelle
+                                            </button>
+                                            <button class="btn btn-outline-danger fw-bold"
+                                                    @onclick="() => OnClick_Operation(Operations.Remove, item.SinifId)">
+                                                <i class="fas fa-trash"></i> Sil
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="fw-bold text-primary">@item.SinifAdi</td>
+                                    <td><span class="badge bg-secondary">@item.Kat .Kat</span></td>
+                                    <td><span class="badge bg-info text-dark">@item.Kapasite Kişilik</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @* --- EKLEME / GÜNCELLEME / SİLME FORMU --- *@
+        @if (new[] { Operations.Add, Operations.Update, Operations.Remove }.Contains(_operation))
+        {
+            <div class="card shadow border-0 mt-4" style="max-width: 500px;">
+                <div class="card-header bg-@_operation.Color() text-white">
+                    <h5 class="m-0"><i class="fas fa-edit"></i> @_operation.Title()</h5>
+                </div>
+                <div class="card-body">
+
+                    @foreach (var prop in GetProperties<Model>().Where(p => p.Name != "SinifId"))
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">@prop.Name</label>
+
+                            @if (prop.PropertyType == typeof(int))
+                            {
+                                <input type="number" class="form-control"
+                                       value="@(_model[prop.Name])"
+                                       @onchange="@((e) => OnChange_Input(prop.Name, e.Value))"
+                                       disabled="@(_operation == Operations.Remove)" />
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control"
+                                       value="@(_model[prop.Name])"
+                                       @onchange="@((e) => OnChange_Input(prop.Name, e.Value))"
+                                       disabled="@(_operation == Operations.Remove)" />
+                            }
+                        </div>
+                    }
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button class="btn btn-secondary" @onclick="OnClick_Cancel">İptal</button>
+                        <button class="btn btn-@_operation.Color()" @onclick="OnClick_Save">
+                            <i class="fas fa-save"></i> @(_operation == Operations.Remove ? "Onayla ve Sil" : "Kaydet")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    #region Fields
+    Operations _operation = Operations.List;
+    Model _model = new();
+    #endregion
+
+    #region Lifecycle
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await GetItems();
+        }
+    }
+    #endregion
+
+    #region Data Methods
+    async Task GetItems()
+    {
+        _operation = Operations.List;
+        await _myDbModel_Provider.Execute<Model>(_myDbModel, "sp_Sinif_Listele");
+        StateHasChanged();
+    }
+    #endregion
+
+    #region Event Handlers
+    private void OnChange_Input(string name, object value)
+    {
+        var prop = typeof(Model).GetProperty(name);
+        if (prop == null) return;
+
+        var stringValue = value?.ToString() ?? string.Empty;
+
+        if (prop.PropertyType == typeof(int))
+        {
+            if (int.TryParse(stringValue, out int intValue))
+                prop.SetValue(_model, intValue);
+        }
+        else
+        {
+            prop.SetValue(_model, stringValue);
+        }
+    }
+
+    private void OnClick_Operation(Operations operation, int? id = 0)
+    {
+        _operation = operation;
+        if (_operation == Operations.Add)
+        {
+            _model = new Model();
+        }
+        else
+        {
+            // PK ismi SinifId olduğu için buna göre arama yapıyoruz
+            _model = _myDbModel.Items.FirstOrDefault(f => f.SinifId == id) ?? new Model();
+        }
+    }
+
+    private async void OnClick_Save()
+    {
+        // KRİTİK: PascalCase uyumu için System.Text.Json kullanıyoruz
+        var jsonvalues = JsonSerializer.Serialize(_model);
+
+        var results = await _myDbModel_Provider.SetItems<MyDbModel_Result_KeyValue<string, bool>>(
+            "sp_Sinif_Add_Update_Remove",
+            ("operation", _operation.ToString().ToLower()),
+            ("jsonvalues", jsonvalues)
+        );
+
+        var result = results.FirstOrDefault();
+        if (result != null)
+        {
+            await JS.InvokeVoidAsync("alert", result.Value ? "İşlem Başarılı" : "Hata: " + result.Key);
+        }
+
+        await GetItems();
+    }
+
+    private void OnClick_Cancel() => _operation = Operations.List;
+    #endregion
+
+    #region Helper & Models
+    private IEnumerable<PropertyInfo> GetProperties<T>() where T : class, new() =>
+        typeof(T).GetProperties().Where(p => p.GetIndexParameters().Length == 0);
+
+    public class Model
+    {
+        public int SinifId { get; set; } // Primary Key
+        public string SinifAdi { get; set; }
+        public int Kat { get; set; }
+        public int Kapasite { get; set; }
+
+        public object this[string name]
+        {
+            get => this.GetType().GetProperty(name)?.GetValue(this);
+            set => this.GetType().GetProperty(name)?.SetValue(this, value);
+        }
+    }
+    #endregion
+
+    #region Enums
+    enum Operations
+    {
+        [Color("info"), Title("Listele")] List,
+        [Color("success"), Title("Sınıf Ekle")] Add,
+        [Color("warning"), Title("Güncelle")] Update,
+        [Color("danger"), Title("Sınıfı Sil")] Remove,
+        [Color("secondary"), Title("İptal")] Cancel
+    }
+    #endregion
+}

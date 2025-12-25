@@ -1,0 +1,69 @@
+﻿@page "/logs-1"
+<h3>File Logs</h3>
+<table class="table table-sm table-bordered">
+    <thead>
+        <tr>
+            <th>Source</th>
+            <th>Timestamp</th>
+            <th>Level</th>
+            <th>Category</th>
+            <th>Message</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var log in fileLogs)
+        {
+            <tr>
+                <td>@log.Source</td>
+                <td>@log.Timestamp</td>
+                <td>@log.Level</td>
+                <td>@log.Category</td>
+                <td>@log.Message</td>
+            </tr>
+        }
+    </tbody>
+</table>
+<h3>Database Logs</h3>
+<table class="table table-sm table-bordered">
+    <thead>
+        <tr>
+            <th>Source</th>
+            <th>Timestamp</th>
+            <th>Level</th>
+            <th>Category</th>
+            <th>Message</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var log in dbLogs)
+        {
+            <tr>
+                <td>@log.Source</td>
+                <td>@log.Timestamp</td>
+                <td>@log.Level</td>
+                <td>@log.Category</td>
+                <td>@log.Message</td>
+            </tr>
+        }
+    </tbody>
+</table>
+@inject Logging.LogService LogService
+@code {
+    private List<Logging.LogEntry> fileLogs = [];
+    private List<Logging.LogEntry> dbLogs = [];
+    protected override async Task OnInitializedAsync()
+    {
+        fileLogs = await LogService.GetFileLogsAsync();
+        dbLogs = await LogService.GetDbLogsAsync();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            fileLogs = await LogService.GetFileLogsAsync();
+            dbLogs = await LogService.GetDbLogsAsync();
+
+            StateHasChanged();
+        }
+    }
+}

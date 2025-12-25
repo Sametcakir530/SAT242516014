@@ -1,9 +1,52 @@
 ﻿@page "/"
 
 <PageTitle>Home</PageTitle>
-
+sfssfsdfs
 <h1>Hello, world!</h1>
+<h1 class="text-danger">
+    @_localizer["Hello"]
+    @_localizer["Welcome"]
+</h1>
 
-Welcome to your new app.
 
-saf
+<h1 class="text-success">SAT242516014 Ortak Metin</h1>
+
+<hr />
+
+<h1 class="text-danger">
+    @($"SITE: SAT242516014 {Environment.GetEnvironmentVariable("SAT242516014")}")
+</h1>
+
+<hr />
+
+<h2 class="text-info">
+    @($"ConnectionStrings__DefaultConnection: {Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")}")
+</h2>
+
+
+
+<a href="/Reports/Student">/Reports/Student</a>
+<br>
+<a href="/Reports/Ders">/Reports/Ders</a>
+<br>
+<a href="/logs-1">logs-1</a>
+
+@inject ILogger<Home> Logger
+
+
+
+@code {
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var now = DateTime.Now.ToString("yyyy-MM-dd hh\\:mm\\:ss");
+            Logger.LogInformation($"Log Home Test : {now}");
+
+            StateHasChanged();
+        }
+    }
+
+
+}
