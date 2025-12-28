@@ -16,7 +16,10 @@
 @using SAT242516014.Components
 @using SAT242516014.Models.MyEnums
 
-@inject IMyDbModel<Model> _myDbModel
+@* --- ÖNEMLİ DEĞİŞİKLİK: Generic Tipi Yeni Oluşturduğumuz Class Yaptık --- *@
+@using M = SAT242516014.Filtering.OgrenciDersKayit
+
+@inject IMyDbModel<M> _myDbModel
 @inject IMyDbModel_Provider _myDbModel_Provider
 @inject IJSRuntime JS
 @inject LocalizerService<MyResource> _localizer
@@ -41,14 +44,14 @@
                         @* 1. ÖĞRENCİ SEÇİMİ *@
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Öğrenci</label>
+                            @* Not: Filtreleme class'ında OgrenciAdSoyad property'si var *@
                             <input class="form-control" list="studentOptions" placeholder="Öğrenci ismini yazın..."
                                    value="@_selectedStudentName" @onchange="OnStudentNameChanged"
                                    disabled='@(_operation != Operations.Add)' />
 
-                            @* Kullanıcıya Bilgi Ver *@
                             @if (_model.OgrenciId > 0)
                             {
-                                <small class="text-success"><i class="fas fa-check"></i> Öğrenci Seçildi (ID: @_model.OgrenciId)</small>
+                                <small class="text-success"><i class="fas fa-check"></i> Seçildi (ID: @_model.OgrenciId)</small>
                             }
                             else if (!string.IsNullOrEmpty(_selectedStudentName))
                             {
@@ -90,11 +93,13 @@
                                 <small class="text-muted">Bu dersi veren kayıtlı öğretmen bulunamadı.</small>
                             }
                         </div>
+
                         @* 4. DÖNEM GİRİŞİ *@
                         <div class="col-md-3">
                             <label class="form-label fw-bold">Dönem</label>
                             <input type="text" class="form-control" @bind="_model.Donem" disabled='@(_operation != Operations.Add)' />
                         </div>
+
                         @* 5. TARİH GİRİŞİ *@
                         <div class="col-md-3">
                             <label class="form-label fw-bold">Kayıt Tarihi</label>
@@ -104,6 +109,7 @@
                                    disabled='@(_operation == Operations.Remove)' />
                         </div>
                     </div>
+
                     <div class="d-flex justify-content-end gap-2 mt-4">
                         <button class="btn btn-secondary" @onclick="OnClick_Cancel">@Operations.Cancel.Description()</button>
                         @if (_operation != Operations.Detail)
@@ -116,15 +122,59 @@
                 </div>
             </div>
         }
+
         @* --- LİSTELEME VE TABLO --- *@
         @if (_operation == Operations.List)
         {
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white py-3">
-                    <button class="btn btn-success fw-bold" @onclick="() => OnClick_Operation(Operations.Add)">
-                        <i class="fas fa-plus"></i> Yeni Kayıt Ekle
-                    </button>
+                    <div class="d-flex justify-content-between mb-3">
+                        <button class="btn btn-success fw-bold" @onclick="() => OnClick_Operation(Operations.Add)">
+                            <i class="fas fa-plus"></i> Yeni Kayıt Ekle
+                        </button>
+                    </div>
+
+                    @* --- SAYFALAMA VE SIRALAMA KONTROLLERİ --- *@
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-2">
+                            <input class="form-control text-center fw-bold" readonly
+                                   value="@(TotalRecordCount == 0 ? "0 - 0 / (0)" : $"{(PageNumber - 1) * PageSize + 1} - {Math.Min(TotalRecordCount, PageNumber * PageSize)} / ({TotalRecordCount})")" />
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" value="@OrderBy" @onchange="e => OnChange_OrderBy(e.Value)">
+                                @foreach (var item in _sortingOptions)
+                                {
+                                    <option value="@item.Key">@item.Value</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" value="@PageSize" @onchange="e => OnChange_PageSize(e.Value)">
+                                @foreach (var ps in new[] { 5, 10, 20, 50, 100, int.MaxValue })
+                                {
+                                    <option value="@ps">@((ps == int.MaxValue ? "∞" : ps.ToString()))</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            @if (TotalRecordCount > 0 && TotalPageCount > 1)
+                            {
+                                <ul class="pagination justify-content-end m-0">
+                                    <li class="page-item @(PageNumber == 1 ? "disabled" : "")"><button class="page-link" @onclick="PrevPage">@("<")</button></li>
+                                    @for (var pn = Math.Max(1, PageNumber - 2); pn <= Math.Min(TotalPageCount, PageNumber + 2); pn++)
+                                    {
+                                        var pnx = pn;
+                                        <li class="page-item @(pnx == PageNumber ? "active" : "")">
+                                            <button class="page-link" @onclick="() => GoToPage(pnx)">@pnx</button>
+                                        </li>
+                                    }
+                                    <li class="page-item @(PageNumber == TotalPageCount ? "disabled" : "")"><button class="page-link" @onclick="NextPage">@(">")</button></li>
+                                </ul>
+                            }
+                        </div>
+                    </div>
                 </div>
+
                 <div class="card-body p-0">
                     <table class="table table-hover table-striped mb-0 align-middle">
                         <thead class="table-dark">
@@ -136,6 +186,19 @@
                                 <th>Öğretmen</th>
                                 <th>Dönem</th>
                                 <th>Kayıt Tarihi</th>
+                            </tr>
+                            <tr>
+                                <th>
+                                    <button class="btn btn-sm btn-outline-warning w-100" @onclick="() => OnChange_Filter_Reset()">
+                                        <i class="fas fa-filter"></i> Temizle
+                                    </button>
+                                </th>
+                                <th><input type="text" class="form-control form-control-sm" placeholder="Ara..." value="@Parameter_GetValue("OgrenciAdSoyad")" @onchange='(e) => OnChange_Filter("OgrenciAdSoyad", e.Value)' /></th>
+                                <th><input type="text" class="form-control form-control-sm" placeholder="Ara..." value="@Parameter_GetValue("SinifAdi")" @onchange='(e) => OnChange_Filter("SinifAdi", e.Value)' /></th>
+                                <th><input type="text" class="form-control form-control-sm" placeholder="Ara..." value="@Parameter_GetValue("DersAd")" @onchange='(e) => OnChange_Filter("DersAd", e.Value)' /></th>
+                                <th><input type="text" class="form-control form-control-sm" placeholder="Ara..." value="@Parameter_GetValue("OgretmenAdSoyad")" @onchange='(e) => OnChange_Filter("OgretmenAdSoyad", e.Value)' /></th>
+                                <th><input type="text" class="form-control form-control-sm" placeholder="Ara..." value="@Parameter_GetValue("Donem")" @onchange='(e) => OnChange_Filter("Donem", e.Value)' /></th>
+                                <th><input type="text" class="form-control form-control-sm" placeholder="Yıl-Ay-Gün" value="@Parameter_GetValue("KayitTarihi")" @onchange='(e) => OnChange_Filter("KayitTarihi", e.Value)' /></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -152,6 +215,7 @@
                                             </button>
                                         </div>
                                     </td>
+                                    @* M class'ındaki property isimlerini kullanıyoruz *@
                                     <td class="fw-bold text-primary">@item.OgrenciAdSoyad</td>
                                     <td><span class="badge bg-secondary">@item.SinifAdi</span></td>
                                     <td>@item.DersAd</td>
@@ -167,12 +231,13 @@
         }
     }
 </div>
+
 @code {
     string _spName_List = "sp_OgrenciDersKayit_Listele";
     string _spName_Add_Update_Remove = "sp_OgrenciDersKayit_Add_Update_Remove";
 
     Operations _operation = Operations.List;
-    Model _model = new();
+    M _model = new(); // Yeni Filtering Class'ını kullanıyor
 
     List<StudentLookupModel> _studentList = new();
     List<DersLookupModel> _dersList = new();
@@ -181,10 +246,24 @@
 
     string _selectedStudentName = string.Empty;
 
+    // --- SIRALAMA SEÇENEKLERİ ---
+    private Dictionary<string, string> _sortingOptions = new()
+    {
+        { "KayitTarihi desc", "Tarih (Yeni -> Eski)" },
+        { "KayitTarihi asc", "Tarih (Eski -> Yeni)" },
+        { "OgrenciAdSoyad asc", "Öğrenci Adı (A-Z)" },
+        { "OgrenciAdSoyad desc", "Öğrenci Adı (Z-A)" },
+        { "DersAd asc", "Ders Adı (A-Z)" }
+    };
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            _myDbModel.Parameters.OrderBy = "KayitTarihi desc";
+            if (_myDbModel.Parameters.PageNumber <= 0) _myDbModel.Parameters.PageNumber = 1;
+            if (_myDbModel.Parameters.PageSize == 0) _myDbModel.Parameters.PageSize = 10;
+
             await LoadLookups();
             await GetItemsAsync();
         }
@@ -193,50 +272,62 @@
     async Task GetItemsAsync()
     {
         _operation = Operations.List;
-        await _myDbModel_Provider.Execute<Model>(_myDbModel, _spName_List);
+        await _myDbModel_Provider.Execute<M>(_myDbModel, _spName_List);
         StateHasChanged();
     }
 
+    private async void GetItems() => await GetItemsAsync();
+
     async Task LoadLookups()
     {
-        // Lookup SP'leri
         _studentList = (await _myDbModel_Provider.SetItems<StudentLookupModel>("sp_Student_Lookup")).ToList();
         _dersList = (await _myDbModel_Provider.SetItems<DersLookupModel>("sp_Ders_Lookup")).ToList();
-
-        // ÖNEMLİ DÜZELTME: Öğretmenleri listelemek için doğru SP kullanıldı.
-        // Daha önceki 'sp_Ogretmen_Add_Update_Remove' prosedürü bir liste dönmez, sadece işlem sonucu döner.
-        // Veritabanınızda 'sp_Ogretmen_Listele' prosedürünün olduğundan emin olun.
         _allTeacherList = (await _myDbModel_Provider.SetItems<TeacherLookupModel>("sp_Ogretmen_Listele")).ToList();
     }
+
+    #region Pagination, Sorting, Filtering Logic
+    private int TotalRecordCount => _myDbModel.Parameters.TotalRecordCount;
+    private int TotalPageCount => _myDbModel.Parameters.TotalPageCount;
+    public string OrderBy { get => _myDbModel.Parameters.OrderBy; set { _myDbModel.Parameters.OrderBy = value; GetItems(); } }
+    private int PageSize { get => _myDbModel.Parameters.PageSize; set { _myDbModel.Parameters.PageSize = value; GetItems(); } }
+    private int PageNumber { get => _myDbModel.Parameters.PageNumber; set { _myDbModel.Parameters.PageNumber = value; GetItems(); } }
+
+    void OnChange_OrderBy(object value) { _myDbModel.Parameters.OrderBy = value?.ToString() ?? "KayitTarihi desc"; GetItems(); }
+    void OnChange_PageSize(object value) { int.TryParse(value?.ToString(), out var ps); _myDbModel.Parameters.PageSize = ps; GetItems(); }
+    void GoToPage(int page) { if (page >= 1 && page <= TotalPageCount) { PageNumber = page; } }
+    void PrevPage() { if (PageNumber > 1) PageNumber--; }
+    void NextPage() { if (PageNumber < TotalPageCount) PageNumber++; }
+
+    private string? Parameter_GetValue(string name) => _myDbModel.Parameters.Where.ContainsKey(name) ? _myDbModel.Parameters.Where[name] : null;
+
+    void OnChange_Filter(string columnName, object value)
+    {
+        var valStr = value?.ToString();
+        if (string.IsNullOrEmpty(valStr)) _myDbModel.Parameters.Where.Remove(columnName);
+        else _myDbModel.Parameters.Where[columnName] = valStr;
+        _myDbModel.Parameters.PageNumber = 1;
+        GetItems();
+    }
+    void OnChange_Filter_Reset() { _myDbModel.Parameters.Where.Clear(); GetItems(); }
+    #endregion
 
     void OnDersChange(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int selectedDersId))
         {
             _model.DersId = selectedDersId;
-            // Ekleme yaparken ders değişirse öğretmen seçimini sıfırla
             if (_operation == Operations.Add) _model.OgretmenId = 0;
 
             var ders = _dersList.FirstOrDefault(d => d.Id == selectedDersId);
             if (ders != null)
             {
-                // DERS ADINA GÖRE FİLTRELEME
-                // Veritabanındaki öğretmen tablosundaki 'Ders' sütunu ile Seçilen Dersin 'Ad' sütunu eşleştiriliyor.
-                // StringComparison.OrdinalIgnoreCase ile büyük/küçük harf farkı engelleniyor.
                 _filteredOgretmenList = _allTeacherList
                     .Where(o => !string.IsNullOrEmpty(o.Ders) &&
                            o.Ders.Trim().Equals(ders.Ad.Trim(), StringComparison.OrdinalIgnoreCase))
                     .ToList();
-
-                // Eğer filtreleme sonucunda kimse yoksa, belki kullanıcı yanlış yazmıştır diye
-                // listeyi boş bırakıyoruz (veya tercihen hepsini gösterebilirsiniz).
-                // Kullanıcıya UI'da "Bulunamadı" mesajı göstermek için bu listeyi boş bırakmak daha mantıklı.
             }
-            else
-            {
-                _filteredOgretmenList.Clear();
-            }
-            StateHasChanged(); // Arayüzü tetikle
+            else { _filteredOgretmenList.Clear(); }
+            StateHasChanged();
         }
     }
 
@@ -252,16 +343,18 @@
         _operation = operation;
         if (_operation == Operations.Add)
         {
-            _model = new Model { KayitTarihi = DateTime.Today, Donem = DateTime.Now.Year + "-Güz" };
+            _model = new M { KayitTarihi = DateTime.Today, Donem = DateTime.Now.Year + "-Güz" };
             _selectedStudentName = "";
-            _filteredOgretmenList = new List<TeacherLookupModel>(_allTeacherList); // İlk açılışta hepsi görünsün veya boş olsun
+            _filteredOgretmenList = new List<TeacherLookupModel>(_allTeacherList);
         }
         else
         {
+            // _myDbModel.Items artık "M" (Filtering.OgrenciDersKayit) tipinde
             var item = _myDbModel.Items.FirstOrDefault(f => f.OgrenciId == ogrenciId && f.DersId == dersId && f.Donem == donem);
             if (item != null)
             {
-                _model = new Model
+                // Yeni bir kopya oluşturuyoruz ki listedeki veri hemen değişmesin
+                _model = new M
                 {
                     OgrenciId = item.OgrenciId,
                     DersId = item.DersId,
@@ -272,7 +365,7 @@
                 };
                 _selectedStudentName = item.OgrenciAdSoyad ?? "";
 
-                // Güncelleme modunda açıldığında da o dersin öğretmenlerini filtrele
+                // Öğretmen filtresini ayarla
                 var ders = _dersList.FirstOrDefault(d => d.Id == item.DersId);
                 if (ders != null)
                 {
@@ -280,8 +373,6 @@
                         .Where(o => !string.IsNullOrEmpty(o.Ders) &&
                                o.Ders.Trim().Equals(ders.Ad.Trim(), StringComparison.OrdinalIgnoreCase))
                         .ToList();
-
-                    // Eğer listede hiç öğretmen yoksa tümünü göster (veri hatası durumunda düzenlemeyi engellememek için)
                     if (_filteredOgretmenList.Count == 0) _filteredOgretmenList = _allTeacherList;
                 }
             }
@@ -290,57 +381,32 @@
 
     async Task OnClick_Save()
     {
-        if (_model.OgrenciId <= 0)
-        {
-            await JS.InvokeVoidAsync("alert", "Lütfen listeden geçerli bir Öğrenci seçiniz! İsmi tam ve doğru yazdığınızdan emin olun.");
-            return;
-        }
-        if (_model.DersId <= 0)
-        {
-            await JS.InvokeVoidAsync("alert", "Lütfen bir Ders seçiniz.");
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(_model.Donem))
-        {
-            await JS.InvokeVoidAsync("alert", "Lütfen Dönem bilgisini giriniz.");
-            return;
-        }
+        if (_model.OgrenciId <= 0) { await JS.InvokeVoidAsync("alert", "Lütfen listeden geçerli bir Öğrenci seçiniz!"); return; }
+        if (_model.DersId <= 0) { await JS.InvokeVoidAsync("alert", "Lütfen bir Ders seçiniz."); return; }
+        if (string.IsNullOrWhiteSpace(_model.Donem)) { await JS.InvokeVoidAsync("alert", "Lütfen Dönem bilgisini giriniz."); return; }
 
         var jsonValues = JsonSerializer.Serialize(_model);
 
+        // --- HATANIN DÜZELTİLDİĞİ KISIM ---
+        // (string, ?) hatasını önlemek için (Key: "...", Value: (object)...) formatı kullanıldı.
         var results = await _myDbModel_Provider.SetItems<MyDbModel_Result_KeyValue<string, bool>>(
             _spName_Add_Update_Remove,
-            ("operation", _operation.ToString().ToLower()),
-            ("jsonvalues", jsonValues)
+            (Key: "operation", Value: (object)_operation.ToString().ToLower()),
+            (Key: "jsonvalues", Value: (object)jsonValues)
         );
 
         var result = results?.FirstOrDefault();
         if (result != null)
         {
             await JS.InvokeVoidAsync("alert", result.Key);
-            if (result.Value)
-            {
-                await GetItemsAsync();
-            }
+            if (result.Value) await GetItemsAsync();
         }
     }
 
     void OnClick_Cancel() => _operation = Operations.List;
 
-    #region Models
-    public class Model
-    {
-        public int OgrenciId { get; set; }
-        public int DersId { get; set; }
-        public int OgretmenId { get; set; }
-        public string? OgrenciAdSoyad { get; set; }
-        public string? SinifAdi { get; set; }
-        public string? DersAd { get; set; }
-        public string? OgretmenAdSoyad { get; set; }
-        public DateTime? KayitTarihi { get; set; }
-        public string? Donem { get; set; }
-    }
-
+    #region Models (Lookup Modelleri)
+    // Model sınıfı kaldırıldı çünkü yukarıda using alias (M) ile Filtering namespace'indekini kullanıyoruz.
     class StudentLookupModel { public int Id { get; set; } public string AdSoyad { get; set; } = ""; }
     class DersLookupModel { public int Id { get; set; } public string Ad { get; set; } = ""; public string Kod { get; set; } = ""; public string SinifAdi { get; set; } = ""; }
     class TeacherLookupModel { public int Id { get; set; } public string Ad { get; set; } = ""; public string Soyad { get; set; } = ""; public string Ders { get; set; } = ""; public string AdSoyad => $"{Ad} {Soyad}"; }
